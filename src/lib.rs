@@ -114,6 +114,10 @@ impl Downloader {
     ///
     /// See [simple usage] and [`RequestBuilder::hash`] for examples.
     ///
+    /// # Errors
+    ///
+    /// If given `url` is invalid then [`RequestBuilder::send`] will fail.
+    ///
     /// [simple usage]: crate#simple-usage
     pub fn get<U: IntoUrl>(&mut self, url: U) -> RequestBuilder {
         RequestBuilder::new(self, self.client.get(url))
@@ -358,6 +362,8 @@ impl<'a> RequestBuilder<'a> {
     ///
     /// [simple usage]: crate#simple-usage
     pub fn send(mut self) -> Result<Bytes, Error> {
+        let request = self.inner.build()?;
+
         let mut errors = Vec::with_capacity(self.downloader.retry_delays.len());
 
         self.downloader.sleep_until_ready();
@@ -366,7 +372,13 @@ impl<'a> RequestBuilder<'a> {
         loop {
             self.downloader.prev_download_start = Some(Instant::now());
 
-            match self.send_once() {
+            // `try_clone` can return `None` only if body isn't clonable,
+            // but this code never sets body, so this `unwrap` can't fail.
+            match RequestBuilder::send_once(
+                &self.downloader.client,
+                &mut self.hash,
+                request.try_clone().unwrap(),
+            ) {
                 Ok(bytes) => return Ok(bytes),
                 Err(error) => errors.push(error),
             }
@@ -394,15 +406,19 @@ impl<'a> RequestBuilder<'a> {
         }
     }
 
-    fn send_once(&mut self) -> Result<Bytes, Error> {
-        let response = self.inner.try_clone().unwrap().send()?;
+    fn send_once(
+        client: &Client,
+        hash: &mut Option<(String, Box<dyn DynDigest>)>,
+        request: reqwest::blocking::Request,
+    ) -> Result<Bytes, Error> {
+        let response = client.execute(request)?;
         let status = response.status();
 
         if status != StatusCode::OK {
             Err(Error::StatusNotOk(status))
         } else {
             let bytes = response.bytes()?;
-            if let Some((expected, digest)) = &mut self.hash {
+            if let Some((expected, digest)) = hash {
                 digest.reset();
                 digest.update(&bytes);
                 let mut got = vec![0; digest.output_size()];

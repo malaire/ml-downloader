@@ -42,4 +42,4 @@ let mut downloader = Downloader::builder()
 # Ok::<(), ml_downloader::Error>(())
 ```
 
-[`Downloader`]: https://docs.rs/ml-downloader/0.1.1/ml_downloader/struct.Downloader.html
+[`Downloader`]: https://docs.rs/ml-downloader/0.2.0/ml_downloader/struct.Downloader.html

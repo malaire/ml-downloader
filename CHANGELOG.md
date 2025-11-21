@@ -1,6 +1,7 @@
 # Changelog
 
 ## NEXT
+- add `DownloaderBuilder::delay`
 - update dependencies
 
 ## 0.1.1 - 2023-08-18

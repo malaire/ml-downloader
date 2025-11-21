@@ -92,10 +92,12 @@ impl From<ReqwestError> for Error {
 /// See [crate index](crate#examples) for examples.
 pub struct Downloader {
     client: Client,
+    min_delay: Duration,
+    max_delay: Duration,
     min_interval: Duration,
     max_interval: Duration,
     retry_delays: Vec<(Duration, Duration)>,
-    prev_download_start: Option<Instant>,
+    sleep_until: Instant,
 }
 
 impl Downloader {
@@ -133,7 +135,7 @@ impl Downloader {
     /// After this the next [`RequestBuilder::send`] will start
     /// download immediately without sleep.
     ///
-    /// See [`DownloaderBuilder::interval`].
+    /// See [`DownloaderBuilder::delay`] and [`DownloaderBuilder::interval`].
     ///
     /// # Examples
     ///
@@ -153,13 +155,9 @@ impl Downloader {
     /// # Ok::<(), ml_downloader::Error>(())
     /// ```
     pub fn sleep_until_ready(&mut self) {
-        if let Some(prev_download_start) = self.prev_download_start {
-            let interval = random_duration(self.min_interval, self.max_interval);
-            let elapsed = Instant::now() - prev_download_start;
-            if elapsed < interval {
-                std::thread::sleep(interval - elapsed);
-            }
-            self.prev_download_start = None;
+        let now = Instant::now();
+        if self.sleep_until > now {
+            std::thread::sleep(self.sleep_until - now);
         }
     }
 }
@@ -174,6 +172,8 @@ impl Downloader {
 /// [custom configuration]: crate#custom-configuration
 pub struct DownloaderBuilder {
     client_builder: ClientBuilder,
+    min_delay: Duration,
+    max_delay: Duration,
     min_interval: Duration,
     max_interval: Duration,
     retry_delays: Vec<(Duration, Duration)>,
@@ -196,9 +196,46 @@ impl DownloaderBuilder {
             client: self.client_builder.build()?,
             min_interval: self.min_interval,
             max_interval: self.max_interval,
+            min_delay: self.min_delay,
+            max_delay: self.max_delay,
             retry_delays: self.retry_delays,
-            prev_download_start: None,
+            sleep_until: Instant::now(),
         })
+    }
+
+    /// Sets delay between successful downloads in seconds, default is 0.
+    ///
+    /// A random delay between given `min` and `max` is generated
+    /// for each download. If elapsed time since previous download ended
+    /// is less than this delay then [`RequestBuilder::send`] will sleep
+    /// for the remaining duration before starting download.
+    ///
+    /// See also [`DownloaderBuilder::interval`].
+    ///
+    /// # Panics
+    ///
+    /// If `min > max`.
+    ///
+    /// # Examples
+    ///
+    /// Configure `1.0 - 1.1` seconds delay between successful downloads.
+    ///
+    /// ```rust
+    /// use ml_downloader::Downloader;
+    ///
+    /// let mut downloader = Downloader::builder()
+    ///     .delay(1.0, 1.1)
+    ///     .build()?;
+    ///
+    /// # Ok::<(), ml_downloader::Error>(())
+    /// ```
+    pub fn delay(self, min: f32, max: f32) -> Self {
+        assert!(min <= max);
+        DownloaderBuilder {
+            min_delay: Duration::from_secs_f32(min),
+            max_delay: Duration::from_secs_f32(max),
+            ..self
+        }
     }
 
     /// Sets interval between successful downloads in seconds, default is 0.
@@ -207,6 +244,8 @@ impl DownloaderBuilder {
     /// for each download. If elapsed time since previous download started
     /// is less than this interval then [`RequestBuilder::send`] will sleep
     /// for the remaining duration before starting download.
+    ///
+    /// See also [`DownloaderBuilder::delay`].
     ///
     /// # Panics
     ///
@@ -240,6 +279,8 @@ impl DownloaderBuilder {
     pub fn new() -> Self {
         Self {
             client_builder: Client::builder(),
+            min_delay: Duration::ZERO,
+            max_delay: Duration::ZERO,
             min_interval: Duration::ZERO,
             max_interval: Duration::ZERO,
             retry_delays: Vec::new(),
@@ -368,9 +409,12 @@ impl<'a> RequestBuilder<'a> {
 
         self.downloader.sleep_until_ready();
 
+        let delay = random_duration(self.downloader.min_delay, self.downloader.max_delay);
+        let interval = random_duration(self.downloader.min_interval, self.downloader.max_interval);
+
         let mut retry_count = 0;
         loop {
-            self.downloader.prev_download_start = Some(Instant::now());
+            let start = Instant::now();
 
             // `try_clone` can return `None` only if body isn't clonable,
             // but this code never sets body, so this `unwrap` can't fail.
@@ -379,7 +423,11 @@ impl<'a> RequestBuilder<'a> {
                 &mut self.hash,
                 request.try_clone().unwrap(),
             ) {
-                Ok(bytes) => return Ok(bytes),
+                Ok(bytes) => {
+                    let end = Instant::now();
+                    self.downloader.sleep_until = (start + interval).max(end + delay);
+                    return Ok(bytes);
+                }
                 Err(error) => errors.push(error),
             }
 

@@ -119,7 +119,7 @@ impl Downloader {
     /// If given `url` is invalid then [`RequestBuilder::send`] will fail.
     ///
     /// [simple usage]: crate#simple-usage
-    pub fn get<U: IntoUrl>(&mut self, url: U) -> RequestBuilder {
+    pub fn get<U: IntoUrl>(&mut self, url: U) -> RequestBuilder<'_> {
         RequestBuilder::new(self, self.client.get(url))
     }
 

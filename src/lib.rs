@@ -12,6 +12,7 @@ use bytes::Bytes;
 use digest::DynDigest;
 use reqwest::{
     blocking::{Client, ClientBuilder},
+    header::HeaderMap,
     Error as ReqwestError, IntoUrl, StatusCode,
 };
 
@@ -92,6 +93,7 @@ impl From<ReqwestError> for Error {
 /// See [crate index](crate#examples) for examples.
 pub struct Downloader {
     client: Client,
+    headers: HeaderMap,
     min_delay: Duration,
     max_delay: Duration,
     min_interval: Duration,
@@ -123,6 +125,27 @@ impl Downloader {
     /// [simple usage]: crate#simple-usage
     pub fn get<U: IntoUrl>(&mut self, url: U) -> RequestBuilder<'_> {
         RequestBuilder::new(self, self.client.get(url))
+    }
+
+    /// Returns response headers of the latest download.
+    ///
+    /// Returned [`HeaderMap`] is empty if the latest download failed
+    /// while sending request or if no downloads have been done yet.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use ml_downloader::Downloader;
+    ///
+    /// let mut downloader = Downloader::new()?;
+    /// let bytes = downloader.get("https://example.com/").send()?;
+    /// let headers = downloader.headers();
+    /// # Ok::<(), ml_downloader::Error>(())
+    /// ```
+    ///
+    /// [`HeaderMap`]: reqwest::header::HeaderMap
+    pub fn headers(&self) -> &HeaderMap {
+        &self.headers
     }
 
     /// Creates new [`Downloader`] with default configuration.
@@ -194,6 +217,7 @@ impl DownloaderBuilder {
     pub fn build(self) -> Result<Downloader, Error> {
         Ok(Downloader {
             client: self.client_builder.build()?,
+            headers: HeaderMap::new(),
             min_interval: self.min_interval,
             max_interval: self.max_interval,
             min_delay: self.min_delay,
@@ -419,7 +443,7 @@ impl<'a> RequestBuilder<'a> {
             // `try_clone` can return `None` only if body isn't clonable,
             // but this code never sets body, so this `unwrap` can't fail.
             match RequestBuilder::send_once(
-                &self.downloader.client,
+                &mut self.downloader,
                 &mut self.hash,
                 request.try_clone().unwrap(),
             ) {
@@ -455,12 +479,14 @@ impl<'a> RequestBuilder<'a> {
     }
 
     fn send_once(
-        client: &Client,
+        downloader: &mut Downloader,
         hash: &mut Option<(String, Box<dyn DynDigest>)>,
         request: reqwest::blocking::Request,
     ) -> Result<Bytes, Error> {
-        let response = client.execute(request)?;
+        downloader.headers = HeaderMap::new();
+        let response = downloader.client.execute(request)?;
         let status = response.status();
+        downloader.headers = response.headers().clone();
 
         if status != StatusCode::OK {
             Err(Error::StatusNotOk(status))

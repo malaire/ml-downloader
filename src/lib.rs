@@ -120,19 +120,6 @@ impl Downloader {
         DownloaderBuilder::new()
     }
 
-    /// Begins building a request to download file from given `url`.
-    ///
-    /// See [simple usage] and [`RequestBuilder::hash`] for examples.
-    ///
-    /// # Errors
-    ///
-    /// If given `url` is invalid then [`RequestBuilder::get`] will fail.
-    ///
-    /// [simple usage]: crate#simple-usage
-    pub fn url<U: IntoUrl>(&mut self, url: U) -> RequestBuilder<'_> {
-        RequestBuilder::new(self, self.client.get(url))
-    }
-
     /// Returns response headers of the latest download.
     ///
     /// Returned [`HeaderMap`] is empty if the latest download failed
@@ -224,6 +211,19 @@ impl Downloader {
         if self.sleep_until > now {
             std::thread::sleep(self.sleep_until - now);
         }
+    }
+
+    /// Begins building a request to download file from given `url`.
+    ///
+    /// See [simple usage] and [`RequestBuilder::hash`] for examples.
+    ///
+    /// # Errors
+    ///
+    /// If given `url` is invalid then [`RequestBuilder::get`] will fail.
+    ///
+    /// [simple usage]: crate#simple-usage
+    pub fn url<U: IntoUrl>(&mut self, url: U) -> RequestBuilder<'_> {
+        RequestBuilder::new(self, self.client.get(url))
     }
 }
 
@@ -433,31 +433,6 @@ pub struct RequestBuilder<'a> {
 }
 
 impl<'a> RequestBuilder<'a> {
-    /// Sets expected file hash and digest used to calculate it.
-    ///
-    /// Hash is given in hexadecimal, uppercase or lowercase.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use ml_downloader::Downloader;
-    /// use sha2::{Digest, Sha256};
-    ///
-    /// let mut downloader = Downloader::new()?;
-    /// let bytes = downloader
-    ///     .url("https://example.com/")
-    ///     .hash("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", Sha256::new())
-    ///     .get()?;
-    ///
-    /// # Ok::<(), ml_downloader::Error>(())
-    /// ```
-    pub fn hash<D: DynDigest + 'static>(self, expected: &str, digest: D) -> Self {
-        RequestBuilder {
-            hash: Some((expected.to_lowercase(), Box::new(digest))),
-            ..self
-        }
-    }
-
     /// Downloads the file and returns it.
     ///
     /// - Sleeps before starting download if needed.
@@ -506,20 +481,37 @@ impl<'a> RequestBuilder<'a> {
             retry_count += 1;
         }
     }
+
+    /// Sets expected file hash and digest used to calculate it.
+    ///
+    /// Hash is given in hexadecimal, uppercase or lowercase.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use ml_downloader::Downloader;
+    /// use sha2::{Digest, Sha256};
+    ///
+    /// let mut downloader = Downloader::new()?;
+    /// let bytes = downloader
+    ///     .url("https://example.com/")
+    ///     .hash("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", Sha256::new())
+    ///     .get()?;
+    ///
+    /// # Ok::<(), ml_downloader::Error>(())
+    /// ```
+    pub fn hash<D: DynDigest + 'static>(self, expected: &str, digest: D) -> Self {
+        RequestBuilder {
+            hash: Some((expected.to_lowercase(), Box::new(digest))),
+            ..self
+        }
+    }
 }
 
 // ======================================================================
 // RequestBuilder - PRIVATE
 
 impl<'a> RequestBuilder<'a> {
-    fn new(downloader: &'a mut Downloader, inner: reqwest::blocking::RequestBuilder) -> Self {
-        Self {
-            downloader,
-            inner,
-            hash: None,
-        }
-    }
-
     fn get_once(
         downloader: &mut Downloader,
         hash: &mut Option<(String, Box<dyn DynDigest>)>,
@@ -549,6 +541,14 @@ impl<'a> RequestBuilder<'a> {
                 }
             }
             Ok(bytes)
+        }
+    }
+
+    fn new(downloader: &'a mut Downloader, inner: reqwest::blocking::RequestBuilder) -> Self {
+        Self {
+            downloader,
+            inner,
+            hash: None,
         }
     }
 }

@@ -136,7 +136,7 @@ impl Downloader {
     /// Returns response headers of the latest download.
     ///
     /// Returned [`HeaderMap`] is empty if the latest download failed
-    /// while sending request or if no downloads have been done yet.
+    /// before getting headers or if no downloads have been done yet.
     ///
     /// # Examples
     ///

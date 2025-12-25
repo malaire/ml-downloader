@@ -126,10 +126,10 @@ impl Downloader {
     ///
     /// # Errors
     ///
-    /// If given `url` is invalid then [`RequestBuilder::send`] will fail.
+    /// If given `url` is invalid then [`RequestBuilder::get`] will fail.
     ///
     /// [simple usage]: crate#simple-usage
-    pub fn get<U: IntoUrl>(&mut self, url: U) -> RequestBuilder<'_> {
+    pub fn url<U: IntoUrl>(&mut self, url: U) -> RequestBuilder<'_> {
         RequestBuilder::new(self, self.client.get(url))
     }
 
@@ -144,7 +144,7 @@ impl Downloader {
     /// use ml_downloader::Downloader;
     ///
     /// let mut downloader = Downloader::new()?;
-    /// let bytes = downloader.get("https://example.com/").send()?;
+    /// let bytes = downloader.url("https://example.com/").get()?;
     /// let headers = downloader.headers();
     /// # Ok::<(), ml_downloader::Error>(())
     /// ```
@@ -167,7 +167,7 @@ impl Downloader {
     /// use ml_downloader::Downloader;
     ///
     /// let mut downloader = Downloader::new()?;
-    /// let bytes = downloader.get("https://example.com/").send()?;
+    /// let bytes = downloader.url("https://example.com/").get()?;
     /// let mtime = downloader.modified()?.unwrap();
     /// # Ok::<(), ml_downloader::Error>(())
     /// ```
@@ -197,7 +197,7 @@ impl Downloader {
 
     /// Sleeps until ready for next download.
     ///
-    /// After this the next [`RequestBuilder::send`] will start
+    /// After this the next [`RequestBuilder::get`] will start
     /// download immediately without sleep.
     ///
     /// See [`DownloaderBuilder::delay`] and [`DownloaderBuilder::interval`].
@@ -212,10 +212,10 @@ impl Downloader {
     ///     .build()?;
     ///
     /// println!("First download");
-    /// let bytes1 = downloader.get("https://example.com/first").send()?;
+    /// let bytes1 = downloader.url("https://example.com/first").get()?;
     /// downloader.sleep_until_ready();
     /// println!("Second download");
-    /// let bytes2 = downloader.get("https://example.com/second").send()?;
+    /// let bytes2 = downloader.url("https://example.com/second").get()?;
     ///
     /// # Ok::<(), ml_downloader::Error>(())
     /// ```
@@ -273,7 +273,7 @@ impl DownloaderBuilder {
     ///
     /// A random delay between given `min` and `max` is generated
     /// for each download. If elapsed time since previous download ended
-    /// is less than this delay then [`RequestBuilder::send`] will sleep
+    /// is less than this delay then [`RequestBuilder::get`] will sleep
     /// for the remaining duration before starting download.
     ///
     /// See also [`DownloaderBuilder::interval`].
@@ -308,7 +308,7 @@ impl DownloaderBuilder {
     ///
     /// A random interval between given `min` and `max` is generated
     /// for each download. If elapsed time since previous download started
-    /// is less than this interval then [`RequestBuilder::send`] will sleep
+    /// is less than this interval then [`RequestBuilder::get`] will sleep
     /// for the remaining duration before starting download.
     ///
     /// See also [`DownloaderBuilder::delay`].
@@ -445,9 +445,9 @@ impl<'a> RequestBuilder<'a> {
     ///
     /// let mut downloader = Downloader::new()?;
     /// let bytes = downloader
-    ///     .get("https://example.com/")
+    ///     .url("https://example.com/")
     ///     .hash("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", Sha256::new())
-    ///     .send()?;
+    ///     .get()?;
     ///
     /// # Ok::<(), ml_downloader::Error>(())
     /// ```
@@ -458,7 +458,7 @@ impl<'a> RequestBuilder<'a> {
         }
     }
 
-    /// Creates download request and sends it to target URL, with retries.
+    /// Downloads the file and returns it.
     ///
     /// - Sleeps before starting download if needed.
     ///     - See [`DownloaderBuilder::interval`] and [`Downloader::sleep_until_ready`].
@@ -468,7 +468,7 @@ impl<'a> RequestBuilder<'a> {
     /// See [simple usage] and [`RequestBuilder::hash`] for examples.
     ///
     /// [simple usage]: crate#simple-usage
-    pub fn send(mut self) -> Result<Bytes, Error> {
+    pub fn get(mut self) -> Result<Bytes, Error> {
         let request = self.inner.build()?;
 
         let mut errors = Vec::with_capacity(self.downloader.retry_delays.len());
@@ -484,7 +484,7 @@ impl<'a> RequestBuilder<'a> {
 
             // `try_clone` can return `None` only if body isn't clonable,
             // but this code never sets body, so this `unwrap` can't fail.
-            match RequestBuilder::send_once(
+            match RequestBuilder::get_once(
                 &mut self.downloader,
                 &mut self.hash,
                 request.try_clone().unwrap(),
@@ -520,7 +520,7 @@ impl<'a> RequestBuilder<'a> {
         }
     }
 
-    fn send_once(
+    fn get_once(
         downloader: &mut Downloader,
         hash: &mut Option<(String, Box<dyn DynDigest>)>,
         request: reqwest::blocking::Request,

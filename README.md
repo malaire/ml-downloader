@@ -17,7 +17,7 @@ Create [`Downloader`] with default configuration and then download one file.
 use ml_downloader::Downloader;
 
 let mut downloader = Downloader::new()?;
-let bytes = downloader.get("https://example.com/").send()?;
+let bytes = downloader.url("https://example.com/").get()?;
 # Ok::<(), ml_downloader::Error>(())
 ```
 

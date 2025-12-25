@@ -1,6 +1,8 @@
 # Changelog
 
 ## NEXT
+- rename `Downloader::get` to `url` **breaking**
+- rename `RequestBuilder::send` to `get` **breaking**
 - add `Downloader::headers`
 - add `Downloader::modified`
 

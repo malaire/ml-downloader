@@ -5,7 +5,7 @@
 use std::{
     error::Error as StdError,
     fmt, thread,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime},
 };
 
 use bytes::Bytes;
@@ -42,6 +42,9 @@ pub enum Error {
         expected: String,
     },
 
+    /// Last-Modified header is invalid and couldn't be parsed.
+    InvalidLastModifiedHeader,
+
     /// Download failed.
     DownloadFailed(
         /// Errors, one error for each (re)try.
@@ -59,6 +62,9 @@ impl fmt::Display for Error {
             Error::StatusNotOk(status) => status.fmt(f),
             Error::HashMismatch { got, expected } => {
                 write!(f, "hash mismatch\nGot     :{}\nExpected:{}", got, expected)
+            }
+            Error::InvalidLastModifiedHeader => {
+                write!(f, "invalid Last-Modified header")
             }
             Error::DownloadFailed(errors) => {
                 write!(f, "download failed:")?;
@@ -146,6 +152,42 @@ impl Downloader {
     /// [`HeaderMap`]: reqwest::header::HeaderMap
     pub fn headers(&self) -> &HeaderMap {
         &self.headers
+    }
+
+    /// Returns parsed Last-Modified header of the latest download.
+    ///
+    /// Returns `None` if
+    /// - the latest download didn't have Last-Modified header
+    /// - the latest download failed before getting headers
+    /// - no downloads have been done yet
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use ml_downloader::Downloader;
+    ///
+    /// let mut downloader = Downloader::new()?;
+    /// let bytes = downloader.get("https://example.com/").send()?;
+    /// let mtime = downloader.modified()?.unwrap();
+    /// # Ok::<(), ml_downloader::Error>(())
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Fails if Last-Modified header is invalid and can't be parsed.
+    pub fn modified(&self) -> Result<Option<SystemTime>, Error> {
+        if let Some(mtime) = self.headers.get(reqwest::header::LAST_MODIFIED) {
+            let mtime = mtime
+                .to_str()
+                .map_err(|_| Error::InvalidLastModifiedHeader)?;
+
+            let mtime =
+                httpdate::parse_http_date(mtime).map_err(|_| Error::InvalidLastModifiedHeader)?;
+
+            Ok(Some(mtime))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Creates new [`Downloader`] with default configuration.

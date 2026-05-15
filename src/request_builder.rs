@@ -40,36 +40,11 @@ impl<'a> RequestBuilder<'a> {
     /// - Number of retries and the delays inbetween them is configured with
     ///   [`DownloaderBuilder::retry_delays`].
     ///
-    /// See [simple usage] and [`RequestBuilder::hash`] for examples.
+    /// See [simple usage] and [`RequestBuilder::verify_hash`] for examples.
     ///
     /// [simple usage]: crate#simple-usage
     pub fn get(self) -> Result<BytesResponse, Error> {
         Ok(self.download(None::<&Path>)?.into_bytes_response_or_panic())
-    }
-
-    /// Sets expected file hash and digest used to calculate it.
-    ///
-    /// Hash is given in hexadecimal, uppercase or lowercase.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use ml_downloader::Downloader;
-    /// use sha2::{Digest, Sha256};
-    ///
-    /// let mut downloader = Downloader::new()?;
-    /// let response = downloader
-    ///     .url("https://example.com/")
-    ///     .hash("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", Sha256::new())
-    ///     .get()?;
-    ///
-    /// # Ok::<(), ml_downloader::Error>(())
-    /// ```
-    pub fn hash<D: DynDigest + 'static>(self, expected: &str, digest: D) -> Self {
-        RequestBuilder {
-            hash: Some((expected.to_lowercase(), Box::new(digest))),
-            ..self
-        }
     }
 
     /// Downloads the file and saves it to file.
@@ -98,6 +73,34 @@ impl<'a> RequestBuilder<'a> {
         Ok(self
             .download(Some(path))?
             .into_save_to_file_response_or_panic())
+    }
+
+    /// Enables hash verification during download.
+    ///
+    /// Hash is calculated during download and if it differs from given hash
+    /// then [`RequestBuilder::get`] or [`RequestBuilder::save_to_file`] will fail with [`Error::HashMismatch`].
+    ///
+    /// Hash is given in hexadecimal, uppercase or lowercase.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use ml_downloader::Downloader;
+    /// use sha2::{Digest, Sha256};
+    ///
+    /// let mut downloader = Downloader::new()?;
+    /// let response = downloader
+    ///     .url("https://example.com/")
+    ///     .verify_hash("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", Sha256::new())
+    ///     .get()?;
+    ///
+    /// # Ok::<(), ml_downloader::Error>(())
+    /// ```
+    pub fn verify_hash<D: DynDigest + 'static>(self, expected: &str, digest: D) -> Self {
+        RequestBuilder {
+            hash: Some((expected.to_lowercase(), Box::new(digest))),
+            ..self
+        }
     }
 }
 

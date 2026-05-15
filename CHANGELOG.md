@@ -3,6 +3,7 @@
 ## NEXT
 - rename `Downloader::get` to `url` **breaking**
 - rename `RequestBuilder::send` to `get` and change return value to `BytesResponse` **breaking**
+- rename `RequestBuilder::hash` to `verify_hash` **breaking**
 - add `RequestBuilder::save_to_file`
 
 ## 0.2.0 - 2025-11-21

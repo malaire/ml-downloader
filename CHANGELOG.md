@@ -3,6 +3,7 @@
 ## NEXT
 - rename `Downloader::get` to `url` **breaking**
 - rename `RequestBuilder::send` to `get` **breaking**
+- add `RequestBuilder::save_to_file`
 - add `Downloader::headers`
 - add `Downloader::modified`
 

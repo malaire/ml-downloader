@@ -4,7 +4,11 @@
 
 use std::{
     error::Error as StdError,
-    fmt, thread,
+    fmt,
+    fs::File,
+    io::{Error as IoError, Read, Write},
+    path::Path,
+    thread,
     time::{Duration, Instant, SystemTime},
 };
 
@@ -17,11 +21,19 @@ use reqwest::{
 };
 
 // ======================================================================
+// CONST - PRIVATE
+
+const BUFFER_SIZE_BYTES: usize = 64 * 1024;
+
+// ======================================================================
 // Error - PUBLIC
 
 /// Represents all possible errors that can occur in this library.
 #[derive(Debug)]
 pub enum Error {
+    /// Got [`std::io::Error`].
+    IoError(IoError),
+
     /// Got error from [reqwest](https://crates.io/crates/reqwest).
     Reqwest(
         /// The error.
@@ -58,6 +70,7 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Error::IoError(inner) => inner.fmt(f),
             Error::Reqwest(inner) => inner.fmt(f),
             Error::StatusNotOk(status) => status.fmt(f),
             Error::HashMismatch { got, expected } => {
@@ -84,6 +97,12 @@ impl StdError for Error {}
 
 // ======================================================================
 // Error - IMPL FROM
+
+impl From<IoError> for Error {
+    fn from(error: IoError) -> Self {
+        Self::IoError(error)
+    }
+}
 
 impl From<ReqwestError> for Error {
     fn from(error: ReqwestError) -> Self {
@@ -432,42 +451,10 @@ impl<'a> RequestBuilder<'a> {
     /// See [simple usage] and [`RequestBuilder::hash`] for examples.
     ///
     /// [simple usage]: crate#simple-usage
-    pub fn get(mut self) -> Result<Bytes, Error> {
-        let request = self.inner.build()?;
-
-        let mut errors = Vec::with_capacity(self.downloader.retry_delays.len());
-
-        self.downloader.sleep_until_ready();
-
-        let delay = random_duration(self.downloader.min_delay, self.downloader.max_delay);
-        let interval = random_duration(self.downloader.min_interval, self.downloader.max_interval);
-
-        let mut retry_count = 0;
-        loop {
-            let start = Instant::now();
-
-            // `try_clone` can return `None` only if body isn't clonable,
-            // but this code never sets body, so this `unwrap` can't fail.
-            match RequestBuilder::get_once(
-                &mut self.downloader,
-                &mut self.hash,
-                request.try_clone().unwrap(),
-            ) {
-                Ok(bytes) => {
-                    let end = Instant::now();
-                    self.downloader.sleep_until = (start + interval).max(end + delay);
-                    return Ok(bytes);
-                }
-                Err(error) => errors.push(error),
-            }
-
-            if retry_count == self.downloader.retry_delays.len() {
-                return Err(Error::DownloadFailed(errors));
-            }
-
-            let (min, max) = self.downloader.retry_delays[retry_count];
-            thread::sleep(random_duration(min, max));
-            retry_count += 1;
+    pub fn get(self) -> Result<Bytes, Error> {
+        match self.download(None::<&Path>)? {
+            DownloadResult::Bytes(bytes) => Ok(bytes),
+            DownloadResult::Size(_) => panic!("impossible error"),
         }
     }
 
@@ -495,24 +482,152 @@ impl<'a> RequestBuilder<'a> {
             ..self
         }
     }
+
+    /// Downloads the file and saves it to file.
+    ///
+    /// - File is removed if it exists already and if download fails.
+    /// - File modification time is set to Last Modified header, if present.
+    /// - Sleeps before starting download if needed.
+    ///     - See [`DownloaderBuilder::interval`] and [`Downloader::sleep_until_ready`].
+    /// - Number of retries and the delays inbetween them is configured with
+    ///   [`DownloaderBuilder::retry_delays`].
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use ml_downloader::Downloader;
+    ///
+    /// let mut downloader = Downloader::new()?;
+    /// let size = downloader.url("https://example.com/").save_to_file("example.html")?;
+    /// # Ok::<(), ml_downloader::Error>(())
+    /// ```
+    ///
+    pub fn save_to_file(self, path: impl AsRef<Path>) -> Result<u64, Error> {
+        if path.as_ref().exists() {
+            std::fs::remove_file(&path)?;
+        }
+
+        match self.download(Some(path))? {
+            DownloadResult::Bytes(_) => panic!("impossible error"),
+            DownloadResult::Size(size) => Ok(size),
+        }
+    }
 }
 
 // ======================================================================
 // RequestBuilder - PRIVATE
 
+enum DownloadResult {
+    Bytes(Bytes),
+    Size(u64),
+}
+
 impl<'a> RequestBuilder<'a> {
-    fn get_once(
+    fn download(mut self, path: Option<impl AsRef<Path>>) -> Result<DownloadResult, Error> {
+        let request = self.inner.build()?;
+
+        let mut errors = Vec::with_capacity(self.downloader.retry_delays.len());
+
+        self.downloader.sleep_until_ready();
+
+        let delay = random_duration(self.downloader.min_delay, self.downloader.max_delay);
+        let interval = random_duration(self.downloader.min_interval, self.downloader.max_interval);
+
+        let mut retry_count = 0;
+        loop {
+            let start = Instant::now();
+
+            // `try_clone` can return `None` only if body isn't clonable,
+            // but this code never sets body, so this `unwrap` can't fail.
+            match RequestBuilder::download_once(
+                &mut self.downloader,
+                &mut self.hash,
+                request.try_clone().unwrap(),
+                &path,
+            ) {
+                Ok(result) => {
+                    let end = Instant::now();
+                    self.downloader.sleep_until = (start + interval).max(end + delay);
+                    return Ok(result);
+                }
+                Err(error) => {
+                    errors.push(error);
+
+                    if let Some(ref path) = path {
+                        if path.as_ref().exists() {
+                            if let Some(error) = std::fs::remove_file(path).err() {
+                                errors.push(error.into());
+                            }
+                        }
+                    }
+                }
+            }
+
+            if retry_count == self.downloader.retry_delays.len() {
+                return Err(Error::DownloadFailed(errors));
+            }
+
+            let (min, max) = self.downloader.retry_delays[retry_count];
+            thread::sleep(random_duration(min, max));
+            retry_count += 1;
+        }
+    }
+
+    fn download_once(
         downloader: &mut Downloader,
         hash: &mut Option<(String, Box<dyn DynDigest>)>,
         request: reqwest::blocking::Request,
-    ) -> Result<Bytes, Error> {
+        path: &Option<impl AsRef<Path>>,
+    ) -> Result<DownloadResult, Error> {
         downloader.headers = HeaderMap::new();
-        let response = downloader.client.execute(request)?;
+        let mut response = downloader.client.execute(request)?;
         let status = response.status();
         downloader.headers = response.headers().clone();
 
         if status != StatusCode::OK {
             Err(Error::StatusNotOk(status))
+        } else if let Some(path) = path {
+            if let Some((_, digest)) = hash {
+                digest.reset();
+            }
+
+            let mut buffer = [0u8; BUFFER_SIZE_BYTES];
+            let mut file = File::create_new(path)?;
+            let mut size = 0;
+
+            loop {
+                let bytes_read = response.read(&mut buffer)?;
+
+                if bytes_read == 0 {
+                    break;
+                }
+
+                if let Some((_, digest)) = hash {
+                    digest.update(&buffer[..bytes_read]);
+                }
+
+                file.write_all(&buffer[..bytes_read])?;
+                size += bytes_read;
+            }
+
+            if let Some((expected, digest)) = hash {
+                let mut got = vec![0; digest.output_size()];
+                digest.finalize_into_reset(got.as_mut()).unwrap();
+                let got = hex::encode(got);
+
+                if &got != expected {
+                    return Err(Error::HashMismatch {
+                        got,
+                        expected: expected.clone(),
+                    });
+                }
+            }
+
+            if let Some(modified) = parse_last_modified_header(&downloader.headers)? {
+                file.set_modified(modified)?;
+            }
+
+            Ok(DownloadResult::Size(size.try_into().unwrap()))
         } else {
             let bytes = response.bytes()?;
             if let Some((expected, digest)) = hash {
@@ -529,7 +644,7 @@ impl<'a> RequestBuilder<'a> {
                     });
                 }
             }
-            Ok(bytes)
+            Ok(DownloadResult::Bytes(bytes))
         }
     }
 

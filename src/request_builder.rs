@@ -9,7 +9,7 @@ use std::{
 use digest::DynDigest;
 use reqwest::StatusCode;
 
-use crate::{response::Response, util, BytesResponse, Downloader, Error, SaveToFileResponse};
+use crate::{BytesResponse, Downloader, Error, SaveToFileResponse, response::Response, util};
 
 // ======================================================================
 // CONST - PRIVATE
@@ -29,10 +29,36 @@ const BUFFER_SIZE_BYTES: usize = 64 * 1024;
 pub struct RequestBuilder<'a> {
     downloader: &'a mut Downloader,
     inner: reqwest::blocking::RequestBuilder,
-    hash: Option<(String, Box<dyn DynDigest>)>,
+
+    digest: Option<Box<dyn DynDigest>>,
+    expected_hash: Option<String>,
 }
 
 impl<'a> RequestBuilder<'a> {
+    /// Enables hash calculation during download.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use ml_downloader::Downloader;
+    /// use sha2::{Digest, Sha256};
+    ///
+    /// let mut downloader = Downloader::new()?;
+    /// let response = downloader
+    ///     .url("https://example.com/")
+    ///     .calculate_hash(Sha256::new())
+    ///     .get()?;
+    /// let hash = response.hash();
+    ///
+    /// # Ok::<(), ml_downloader::Error>(())
+    /// ```
+    pub fn calculate_hash<D: DynDigest + 'static>(self, digest: D) -> Self {
+        RequestBuilder {
+            digest: Some(Box::new(digest)),
+            ..self
+        }
+    }
+
     /// Downloads the file and returns it.
     ///
     /// - Sleeps before starting download if needed.
@@ -98,7 +124,8 @@ impl<'a> RequestBuilder<'a> {
     /// ```
     pub fn verify_hash<D: DynDigest + 'static>(self, expected: &str, digest: D) -> Self {
         RequestBuilder {
-            hash: Some((expected.to_lowercase(), Box::new(digest))),
+            digest: Some(Box::new(digest)),
+            expected_hash: Some(expected.to_lowercase()),
             ..self
         }
     }
@@ -116,7 +143,8 @@ impl<'a> RequestBuilder<'a> {
         Self {
             downloader,
             inner,
-            hash: None,
+            digest: None,
+            expected_hash: None,
         }
     }
 }
@@ -140,7 +168,8 @@ impl<'a> RequestBuilder<'a> {
             // but this code never sets body, so this `unwrap` can't fail.
             match RequestBuilder::download_once(
                 &mut self.downloader,
-                &mut self.hash,
+                &mut self.digest,
+                &self.expected_hash,
                 request.try_clone().unwrap(),
                 &path,
             ) {
@@ -175,7 +204,8 @@ impl<'a> RequestBuilder<'a> {
 
     fn download_once(
         downloader: &mut Downloader,
-        hash: &mut Option<(String, Box<dyn DynDigest>)>,
+        digest: &mut Option<Box<dyn DynDigest>>,
+        expected_hash: &Option<String>,
         request: reqwest::blocking::Request,
         path: &Option<impl AsRef<Path>>,
     ) -> Result<Response, Error> {
@@ -186,7 +216,7 @@ impl<'a> RequestBuilder<'a> {
         if status != StatusCode::OK {
             Err(Error::StatusNotOk(status))
         } else if let Some(path) = path {
-            if let Some((_, digest)) = hash {
+            if let Some(digest) = digest {
                 digest.reset();
             }
 
@@ -201,7 +231,7 @@ impl<'a> RequestBuilder<'a> {
                     break;
                 }
 
-                if let Some((_, digest)) = hash {
+                if let Some(digest) = digest {
                     digest.update(&buffer[..bytes_read]);
                 }
 
@@ -209,18 +239,14 @@ impl<'a> RequestBuilder<'a> {
                 size += bytes_read;
             }
 
-            if let Some((expected, digest)) = hash {
-                let mut got = vec![0; digest.output_size()];
-                digest.finalize_into_reset(got.as_mut()).unwrap();
-                let got = hex::encode(got);
-
-                if &got != expected {
-                    return Err(Error::HashMismatch {
-                        got,
-                        expected: expected.clone(),
-                    });
-                }
-            }
+            let hash = if let Some(digest) = digest {
+                let mut hash = vec![0; digest.output_size()];
+                digest.finalize_into_reset(hash.as_mut()).unwrap();
+                verify_hash(&hash, expected_hash)?;
+                Some(hash)
+            } else {
+                None
+            };
 
             if let Some(modified) = util::parse_last_modified_header(&headers)? {
                 file.set_modified(modified)?;
@@ -228,25 +254,40 @@ impl<'a> RequestBuilder<'a> {
 
             Ok(Response::new_save_to_file_response(
                 size.try_into().unwrap(),
+                hash,
                 headers,
             ))
         } else {
             let bytes = response.bytes()?;
-            if let Some((expected, digest)) = hash {
+            let hash = if let Some(digest) = digest {
                 digest.reset();
                 digest.update(&bytes);
-                let mut got = vec![0; digest.output_size()];
-                digest.finalize_into_reset(got.as_mut()).unwrap();
-                let got = hex::encode(got);
+                let mut hash = vec![0; digest.output_size()];
+                digest.finalize_into_reset(hash.as_mut()).unwrap();
+                verify_hash(&hash, expected_hash)?;
+                Some(hash)
+            } else {
+                None
+            };
 
-                if &got != expected {
-                    return Err(Error::HashMismatch {
-                        got,
-                        expected: expected.clone(),
-                    });
-                }
-            }
-            Ok(Response::new_bytes_response(bytes, headers))
+            Ok(Response::new_bytes_response(bytes, hash, headers))
         }
     }
+}
+
+// ======================================================================
+// FUNCTIONS - PRIVATE
+// ======================================================================
+
+fn verify_hash(got: &[u8], expected: &Option<String>) -> Result<(), Error> {
+    if let Some(expected) = expected {
+        let got = hex::encode(&got);
+        if got != *expected {
+            return Err(Error::HashMismatch {
+                got,
+                expected: expected.clone(),
+            });
+        }
+    }
+    Ok(())
 }

@@ -31,12 +31,28 @@ impl Response {
         }
     }
 
-    pub(crate) fn new_bytes_response(bytes: Bytes, headers: HeaderMap) -> Self {
-        Response::BytesResponse(BytesResponse { bytes, headers })
+    pub(crate) fn new_bytes_response(
+        bytes: Bytes,
+        hash: Option<Vec<u8>>,
+        headers: HeaderMap,
+    ) -> Self {
+        Response::BytesResponse(BytesResponse {
+            bytes,
+            hash,
+            headers,
+        })
     }
 
-    pub(crate) fn new_save_to_file_response(size: u64, headers: HeaderMap) -> Self {
-        Response::SaveToFileResponse(SaveToFileResponse { headers, size })
+    pub(crate) fn new_save_to_file_response(
+        size: u64,
+        hash: Option<Vec<u8>>,
+        headers: HeaderMap,
+    ) -> Self {
+        Response::SaveToFileResponse(SaveToFileResponse {
+            headers,
+            hash,
+            size,
+        })
     }
 }
 
@@ -47,6 +63,7 @@ impl Response {
 /// Response returned by [`RequestBuilder::get`].
 pub struct BytesResponse {
     bytes: Bytes,
+    hash: Option<Vec<u8>>,
     headers: HeaderMap,
 }
 
@@ -54,6 +71,20 @@ impl BytesResponse {
     /// Returns downloaded file.
     pub fn bytes(&self) -> &Bytes {
         &self.bytes
+    }
+
+    /// Returns hash of the downloaded file in lowercase hexadecimal.
+    ///
+    /// Returns `Some` iff [`RequestBuilder::calculate_hash`] or
+    /// [`RequestBuilder::verify_hash`] was used.
+    ///
+    /// See [`RequestBuilder::calculate_hash`] for example.
+    pub fn hash(&self) -> Option<String> {
+        if let Some(hash) = &self.hash {
+            Some(hex::encode(hash))
+        } else {
+            None
+        }
     }
 
     /// Returns response headers.
@@ -77,11 +108,26 @@ impl BytesResponse {
 
 /// Response returned by [`RequestBuilder::save_to_file`].
 pub struct SaveToFileResponse {
+    hash: Option<Vec<u8>>,
     headers: HeaderMap,
     size: u64,
 }
 
 impl SaveToFileResponse {
+    /// Returns hash of the downloaded file in lowercase hexadecimal.
+    ///
+    /// Returns `Some` iff [`RequestBuilder::calculate_hash`] or
+    /// [`RequestBuilder::verify_hash`] was used.
+    ///
+    /// See [`RequestBuilder::calculate_hash`] for example.
+    pub fn hash(&self) -> Option<String> {
+        if let Some(hash) = &self.hash {
+            Some(hex::encode(hash))
+        } else {
+            None
+        }
+    }
+
     /// Returns response headers.
     pub fn headers(&self) -> &HeaderMap {
         &self.headers

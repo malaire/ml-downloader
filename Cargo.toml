@@ -7,6 +7,8 @@ repository = "https://github.com/malaire/ml-downloader"
 keywords = [ "client", "download", "http", "https", "request" ]
 categories = [ "web-programming::http-client" ]
 edition = "2021"
+# uses `Path::with_added_extension`
+rust-version = "1.91"
 
 include = [
     "/src",
@@ -25,7 +27,7 @@ httpdate = "1.0.3"
 reqwest = { version = "0.13.3", features = [ "blocking" ] }
 
 [dev-dependencies]
-# used in `RequestBuilder::hash` example
+# used in `RequestBuilder::verify_hash` example
 sha2 = "0.11.0"
 
 [build-dependencies]

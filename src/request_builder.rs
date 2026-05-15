@@ -9,7 +9,7 @@ use std::{
 use digest::DynDigest;
 use reqwest::StatusCode;
 
-use crate::{BytesResponse, Downloader, Error, SaveToFileResponse, response::Response, util};
+use crate::{response::Response, util, BytesResponse, Downloader, Error, SaveToFileResponse};
 
 // ======================================================================
 // CONST - PRIVATE
@@ -62,7 +62,8 @@ impl<'a> RequestBuilder<'a> {
     /// Downloads the file and returns it.
     ///
     /// - Sleeps before starting download if needed.
-    ///     - See [`DownloaderBuilder::interval`] and [`Downloader::sleep_until_ready`].
+    ///   - See [`DownloaderBuilder::delay`], [`DownloaderBuilder::interval`]
+    //      and [`Downloader::sleep_until_ready`].
     /// - Number of retries and the delays inbetween them is configured with
     ///   [`DownloaderBuilder::retry_delays`].
     ///
@@ -73,12 +74,22 @@ impl<'a> RequestBuilder<'a> {
         Ok(self.download(None::<&Path>)?.into_bytes_response_or_panic())
     }
 
-    /// Downloads the file and saves it to file.
+    /// Downloads the file and saves it to given path.
     ///
-    /// - File is removed if it exists already and if download fails.
+    /// - With `temporary_extension`
+    ///   - File is downloaded to `{path}.{temporary_extension}`
+    ///     and renamed to `path` after download is successful.
+    ///   - Temporary file is removed if it exists already and if download fails.
+    ///   - Target file at `path` is not touched on failed download.
+    ///
+    /// - Without `temporary_extension`
+    ///   - File is downloaded to `path`.
+    ///   - File is removed if it exists already and if download fails.
+    ///
     /// - File modification time is set to Last Modified header, if present.
     /// - Sleeps before starting download if needed.
-    ///     - See [`DownloaderBuilder::interval`] and [`Downloader::sleep_until_ready`].
+    ///     - See [`DownloaderBuilder::delay`], [`DownloaderBuilder::interval`]
+    ///       and [`Downloader::sleep_until_ready`].
     /// - Number of retries and the delays inbetween them is configured with
     ///   [`DownloaderBuilder::retry_delays`].
     ///
@@ -88,17 +99,41 @@ impl<'a> RequestBuilder<'a> {
     /// use ml_downloader::Downloader;
     ///
     /// let mut downloader = Downloader::new()?;
-    /// let response = downloader.url("https://example.com/").save_to_file("example.html")?;
+    /// let response = downloader
+    ///     .url("https://example.com/")
+    ///     .save_to_file("example.html", Some("tmp"))?;
     /// # Ok::<(), ml_downloader::Error>(())
     /// ```
     ///
-    pub fn save_to_file(self, path: impl AsRef<Path>) -> Result<SaveToFileResponse, Error> {
-        if path.as_ref().exists() {
-            std::fs::remove_file(&path)?;
+    pub fn save_to_file(
+        self,
+        path: impl AsRef<Path>,
+        temporary_extension: Option<&str>,
+    ) -> Result<SaveToFileResponse, Error> {
+        let path = path.as_ref();
+
+        let download_path = if let Some(temp_ext) = temporary_extension {
+            path.with_added_extension(temp_ext)
+        } else {
+            path.to_path_buf()
+        };
+
+        if download_path.exists() {
+            std::fs::remove_file(&download_path)?;
         }
-        Ok(self
-            .download(Some(path))?
-            .into_save_to_file_response_or_panic())
+
+        let response = self
+            .download(Some(&download_path))?
+            .into_save_to_file_response_or_panic();
+
+        if download_path != path {
+            if path.exists() {
+                std::fs::remove_file(&path)?;
+            }
+            std::fs::rename(download_path, path)?;
+        }
+
+        Ok(response)
     }
 
     /// Enables hash verification during download.

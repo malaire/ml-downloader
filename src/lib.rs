@@ -22,11 +22,13 @@ use reqwest::{
 
 // ======================================================================
 // CONST - PRIVATE
+// ======================================================================
 
 const BUFFER_SIZE_BYTES: usize = 64 * 1024;
 
 // ======================================================================
 // Error - PUBLIC
+// ======================================================================
 
 /// Represents all possible errors that can occur in this library.
 #[derive(Debug)]
@@ -66,6 +68,7 @@ pub enum Error {
 
 // ======================================================================
 // Error - IMPL DISPLAY
+// ======================================================================
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -92,11 +95,13 @@ impl fmt::Display for Error {
 
 // ======================================================================
 // Error - IMPL ERROR
+// ======================================================================
 
 impl StdError for Error {}
 
 // ======================================================================
 // Error - IMPL FROM
+// ======================================================================
 
 impl From<IoError> for Error {
     fn from(error: IoError) -> Self {
@@ -112,6 +117,7 @@ impl From<ReqwestError> for Error {
 
 // ======================================================================
 // Downloader - PUBLIC
+// ======================================================================
 
 /// Simple blocking downloader.
 ///
@@ -237,6 +243,7 @@ impl Downloader {
 
 // ======================================================================
 // DownloaderBuilder - PUBLIC
+// ======================================================================
 
 /// A builder to create [`Downloader`] with custom configuration.
 ///
@@ -428,6 +435,7 @@ impl DownloaderBuilder {
 
 // ======================================================================
 // RequestBuilder - PUBLIC
+// ======================================================================
 
 /// A builder to configure download request.
 ///
@@ -516,6 +524,7 @@ impl<'a> RequestBuilder<'a> {
 
 // ======================================================================
 // RequestBuilder - PRIVATE
+// ======================================================================
 
 enum DownloadResult {
     Bytes(Bytes),
@@ -659,6 +668,7 @@ impl<'a> RequestBuilder<'a> {
 
 // ======================================================================
 // FUNCTIONS - PRIVATE
+// ======================================================================
 
 fn parse_last_modified_header(headers: &HeaderMap) -> Result<Option<SystemTime>, Error> {
     if let Some(mtime) = headers.get(reqwest::header::LAST_MODIFIED) {

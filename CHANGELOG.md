@@ -2,10 +2,8 @@
 
 ## NEXT
 - rename `Downloader::get` to `url` **breaking**
-- rename `RequestBuilder::send` to `get` **breaking**
+- rename `RequestBuilder::send` to `get` and change return value to `BytesResponse` **breaking**
 - add `RequestBuilder::save_to_file`
-- add `Downloader::headers`
-- add `Downloader::modified`
 
 ## 0.2.0 - 2025-11-21
 - add `DownloaderBuilder::delay`

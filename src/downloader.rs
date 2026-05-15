@@ -1,8 +1,7 @@
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant};
 
 use reqwest::{
     blocking::{Client, Request, Response},
-    header::HeaderMap,
     IntoUrl,
 };
 
@@ -17,7 +16,6 @@ use crate::{util, DownloaderBuilder, Error, RequestBuilder};
 /// See [crate index](crate#examples) for examples.
 pub struct Downloader {
     client: Client,
-    pub(crate) headers: HeaderMap,
     min_delay: Duration,
     max_delay: Duration,
     min_interval: Duration,
@@ -36,52 +34,6 @@ impl Downloader {
     /// [custom configuration]: crate#custom-configuration
     pub fn builder() -> DownloaderBuilder {
         DownloaderBuilder::new()
-    }
-
-    /// Returns response headers of the latest download.
-    ///
-    /// Returned [`HeaderMap`] is empty if the latest download failed
-    /// before getting headers or if no downloads have been done yet.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use ml_downloader::Downloader;
-    ///
-    /// let mut downloader = Downloader::new()?;
-    /// let bytes = downloader.url("https://example.com/").get()?;
-    /// let headers = downloader.headers();
-    /// # Ok::<(), ml_downloader::Error>(())
-    /// ```
-    ///
-    /// [`HeaderMap`]: reqwest::header::HeaderMap
-    pub fn headers(&self) -> &HeaderMap {
-        &self.headers
-    }
-
-    /// Returns parsed Last-Modified header of the latest download.
-    ///
-    /// Returns `None` if
-    /// - the latest download didn't have Last-Modified header
-    /// - the latest download failed before getting headers
-    /// - no downloads have been done yet
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use ml_downloader::Downloader;
-    ///
-    /// let mut downloader = Downloader::new()?;
-    /// let bytes = downloader.url("https://example.com/").get()?;
-    /// let mtime = downloader.modified()?.unwrap();
-    /// # Ok::<(), ml_downloader::Error>(())
-    /// ```
-    ///
-    /// # Errors
-    ///
-    /// Fails if Last-Modified header is invalid and can't be parsed.
-    pub fn modified(&self) -> Result<Option<SystemTime>, Error> {
-        Ok(util::parse_last_modified_header(&self.headers)?)
     }
 
     /// Creates new [`Downloader`] with default configuration.
@@ -106,10 +58,10 @@ impl Downloader {
     ///     .build()?;
     ///
     /// println!("First download");
-    /// let bytes1 = downloader.url("https://example.com/first").get()?;
+    /// let response1 = downloader.url("https://example.com/first").get()?;
     /// downloader.sleep_until_ready();
     /// println!("Second download");
-    /// let bytes2 = downloader.url("https://example.com/second").get()?;
+    /// let response2 = downloader.url("https://example.com/second").get()?;
     ///
     /// # Ok::<(), ml_downloader::Error>(())
     /// ```
@@ -146,7 +98,6 @@ impl Downloader {
     pub(crate) fn from_builder(builder: DownloaderBuilder) -> Result<Self, Error> {
         Ok(Downloader {
             client: builder.client_builder.build()?,
-            headers: HeaderMap::new(),
             min_interval: builder.min_interval,
             max_interval: builder.max_interval,
             min_delay: builder.min_delay,

@@ -6,11 +6,10 @@ use std::{
     time::Instant,
 };
 
-use bytes::Bytes;
 use digest::DynDigest;
-use reqwest::{header::HeaderMap, StatusCode};
+use reqwest::StatusCode;
 
-use crate::{util, Downloader, Error};
+use crate::{response::Response, util, BytesResponse, Downloader, Error, SaveToFileResponse};
 
 // ======================================================================
 // CONST - PRIVATE
@@ -44,11 +43,8 @@ impl<'a> RequestBuilder<'a> {
     /// See [simple usage] and [`RequestBuilder::hash`] for examples.
     ///
     /// [simple usage]: crate#simple-usage
-    pub fn get(self) -> Result<Bytes, Error> {
-        match self.download(None::<&Path>)? {
-            DownloadResult::Bytes(bytes) => Ok(bytes),
-            DownloadResult::Size(_) => panic!("impossible error"),
-        }
+    pub fn get(self) -> Result<BytesResponse, Error> {
+        Ok(self.download(None::<&Path>)?.into_bytes_response_or_panic())
     }
 
     /// Sets expected file hash and digest used to calculate it.
@@ -62,7 +58,7 @@ impl<'a> RequestBuilder<'a> {
     /// use sha2::{Digest, Sha256};
     ///
     /// let mut downloader = Downloader::new()?;
-    /// let bytes = downloader
+    /// let response = downloader
     ///     .url("https://example.com/")
     ///     .hash("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", Sha256::new())
     ///     .get()?;
@@ -91,19 +87,17 @@ impl<'a> RequestBuilder<'a> {
     /// use ml_downloader::Downloader;
     ///
     /// let mut downloader = Downloader::new()?;
-    /// let size = downloader.url("https://example.com/").save_to_file("example.html")?;
+    /// let response = downloader.url("https://example.com/").save_to_file("example.html")?;
     /// # Ok::<(), ml_downloader::Error>(())
     /// ```
     ///
-    pub fn save_to_file(self, path: impl AsRef<Path>) -> Result<u64, Error> {
+    pub fn save_to_file(self, path: impl AsRef<Path>) -> Result<SaveToFileResponse, Error> {
         if path.as_ref().exists() {
             std::fs::remove_file(&path)?;
         }
-
-        match self.download(Some(path))? {
-            DownloadResult::Bytes(_) => panic!("impossible error"),
-            DownloadResult::Size(size) => Ok(size),
-        }
+        Ok(self
+            .download(Some(path))?
+            .into_save_to_file_response_or_panic())
     }
 }
 
@@ -128,13 +122,8 @@ impl<'a> RequestBuilder<'a> {
 // RequestBuilder - PRIVATE
 // ======================================================================
 
-enum DownloadResult {
-    Bytes(Bytes),
-    Size(u64),
-}
-
 impl<'a> RequestBuilder<'a> {
-    fn download(mut self, path: Option<impl AsRef<Path>>) -> Result<DownloadResult, Error> {
+    fn download(mut self, path: Option<impl AsRef<Path>>) -> Result<Response, Error> {
         let request = self.inner.build()?;
         let mut errors = Vec::with_capacity(self.downloader.retry_delays().len());
 
@@ -186,11 +175,10 @@ impl<'a> RequestBuilder<'a> {
         hash: &mut Option<(String, Box<dyn DynDigest>)>,
         request: reqwest::blocking::Request,
         path: &Option<impl AsRef<Path>>,
-    ) -> Result<DownloadResult, Error> {
-        downloader.headers = HeaderMap::new();
+    ) -> Result<Response, Error> {
         let mut response = downloader.execute(request)?;
         let status = response.status();
-        downloader.headers = response.headers().clone();
+        let headers = response.headers().clone();
 
         if status != StatusCode::OK {
             Err(Error::StatusNotOk(status))
@@ -231,11 +219,14 @@ impl<'a> RequestBuilder<'a> {
                 }
             }
 
-            if let Some(modified) = util::parse_last_modified_header(&downloader.headers)? {
+            if let Some(modified) = util::parse_last_modified_header(&headers)? {
                 file.set_modified(modified)?;
             }
 
-            Ok(DownloadResult::Size(size.try_into().unwrap()))
+            Ok(Response::new_save_to_file_response(
+                size.try_into().unwrap(),
+                headers,
+            ))
         } else {
             let bytes = response.bytes()?;
             if let Some((expected, digest)) = hash {
@@ -252,7 +243,7 @@ impl<'a> RequestBuilder<'a> {
                     });
                 }
             }
-            Ok(DownloadResult::Bytes(bytes))
+            Ok(Response::new_bytes_response(bytes, headers))
         }
     }
 }

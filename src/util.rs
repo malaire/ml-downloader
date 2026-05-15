@@ -1,4 +1,4 @@
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use reqwest::header::HeaderMap;
 
@@ -21,4 +21,10 @@ pub(crate) fn parse_last_modified_header(headers: &HeaderMap) -> Result<Option<S
     } else {
         Ok(None)
     }
+}
+
+pub(crate) fn random_duration(min: Duration, max: Duration) -> Duration {
+    Duration::from_micros(fastrand::u64(
+        min.as_micros() as u64..=max.as_micros() as u64,
+    ))
 }

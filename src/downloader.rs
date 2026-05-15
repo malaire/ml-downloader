@@ -1,6 +1,10 @@
 use std::time::{Duration, Instant, SystemTime};
 
-use reqwest::{blocking::Client, header::HeaderMap, IntoUrl};
+use reqwest::{
+    blocking::{Client, Request, Response},
+    header::HeaderMap,
+    IntoUrl,
+};
 
 use crate::{util, DownloaderBuilder, Error, RequestBuilder};
 
@@ -12,14 +16,14 @@ use crate::{util, DownloaderBuilder, Error, RequestBuilder};
 ///
 /// See [crate index](crate#examples) for examples.
 pub struct Downloader {
-    pub(crate) client: Client,
+    client: Client,
     pub(crate) headers: HeaderMap,
-    pub(crate) min_delay: Duration,
-    pub(crate) max_delay: Duration,
-    pub(crate) min_interval: Duration,
-    pub(crate) max_interval: Duration,
-    pub(crate) retry_delays: Vec<(Duration, Duration)>,
-    pub(crate) sleep_until: Instant,
+    min_delay: Duration,
+    max_delay: Duration,
+    min_interval: Duration,
+    max_interval: Duration,
+    retry_delays: Vec<(Duration, Duration)>,
+    sleep_until: Instant,
 }
 
 impl Downloader {
@@ -82,7 +86,7 @@ impl Downloader {
 
     /// Creates new [`Downloader`] with default configuration.
     pub fn new() -> Result<Self, Error> {
-        DownloaderBuilder::new().build()
+        Self::from_builder(DownloaderBuilder::new())
     }
 
     /// Sleeps until ready for next download.
@@ -127,5 +131,38 @@ impl Downloader {
     /// [simple usage]: crate#simple-usage
     pub fn url<U: IntoUrl>(&mut self, url: U) -> RequestBuilder<'_> {
         RequestBuilder::new(self, self.client.get(url))
+    }
+}
+
+// ======================================================================
+// Downloader - CRATE
+// ======================================================================
+
+impl Downloader {
+    pub(crate) fn execute(&self, request: Request) -> Result<Response, Error> {
+        Ok(self.client.execute(request)?)
+    }
+
+    pub(crate) fn from_builder(builder: DownloaderBuilder) -> Result<Self, Error> {
+        Ok(Downloader {
+            client: builder.client_builder.build()?,
+            headers: HeaderMap::new(),
+            min_interval: builder.min_interval,
+            max_interval: builder.max_interval,
+            min_delay: builder.min_delay,
+            max_delay: builder.max_delay,
+            retry_delays: builder.retry_delays,
+            sleep_until: Instant::now(),
+        })
+    }
+
+    pub(crate) fn retry_delays(&self) -> &[(Duration, Duration)] {
+        &self.retry_delays
+    }
+
+    pub(crate) fn update_sleep_until(&mut self, download_start: Instant, download_end: Instant) {
+        let delay = util::random_duration(self.min_delay, self.max_delay);
+        let interval = util::random_duration(self.min_interval, self.max_interval);
+        self.sleep_until = (download_start + interval).max(download_end + delay);
     }
 }

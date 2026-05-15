@@ -1,9 +1,6 @@
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-use reqwest::{
-    blocking::{Client, ClientBuilder},
-    header::HeaderMap,
-};
+use reqwest::blocking::{Client, ClientBuilder};
 
 use crate::{Downloader, Error};
 
@@ -17,12 +14,12 @@ use crate::{Downloader, Error};
 ///
 /// [custom configuration]: crate#custom-configuration
 pub struct DownloaderBuilder {
-    client_builder: ClientBuilder,
-    min_delay: Duration,
-    max_delay: Duration,
-    min_interval: Duration,
-    max_interval: Duration,
-    retry_delays: Vec<(Duration, Duration)>,
+    pub(crate) client_builder: ClientBuilder,
+    pub(crate) min_delay: Duration,
+    pub(crate) max_delay: Duration,
+    pub(crate) min_interval: Duration,
+    pub(crate) max_interval: Duration,
+    pub(crate) retry_delays: Vec<(Duration, Duration)>,
 }
 
 impl Default for DownloaderBuilder {
@@ -38,16 +35,7 @@ impl DownloaderBuilder {
     ///
     /// [custom configuration]: crate#custom-configuration
     pub fn build(self) -> Result<Downloader, Error> {
-        Ok(Downloader {
-            client: self.client_builder.build()?,
-            headers: HeaderMap::new(),
-            min_interval: self.min_interval,
-            max_interval: self.max_interval,
-            min_delay: self.min_delay,
-            max_delay: self.max_delay,
-            retry_delays: self.retry_delays,
-            sleep_until: Instant::now(),
-        })
+        Downloader::from_builder(self)
     }
 
     /// Sets delay between successful downloads in seconds, default is 0.

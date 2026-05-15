@@ -3,7 +3,7 @@ use std::{
     io::{Read, Write},
     path::Path,
     thread,
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 use bytes::Bytes;
@@ -136,13 +136,9 @@ enum DownloadResult {
 impl<'a> RequestBuilder<'a> {
     fn download(mut self, path: Option<impl AsRef<Path>>) -> Result<DownloadResult, Error> {
         let request = self.inner.build()?;
-
-        let mut errors = Vec::with_capacity(self.downloader.retry_delays.len());
+        let mut errors = Vec::with_capacity(self.downloader.retry_delays().len());
 
         self.downloader.sleep_until_ready();
-
-        let delay = random_duration(self.downloader.min_delay, self.downloader.max_delay);
-        let interval = random_duration(self.downloader.min_interval, self.downloader.max_interval);
 
         let mut retry_count = 0;
         loop {
@@ -157,8 +153,7 @@ impl<'a> RequestBuilder<'a> {
                 &path,
             ) {
                 Ok(result) => {
-                    let end = Instant::now();
-                    self.downloader.sleep_until = (start + interval).max(end + delay);
+                    self.downloader.update_sleep_until(start, Instant::now());
                     return Ok(result);
                 }
                 Err(error) => {
@@ -174,12 +169,14 @@ impl<'a> RequestBuilder<'a> {
                 }
             }
 
-            if retry_count == self.downloader.retry_delays.len() {
+            let retry_delays = self.downloader.retry_delays();
+
+            if retry_count == retry_delays.len() {
                 return Err(Error::DownloadFailed(errors));
             }
 
-            let (min, max) = self.downloader.retry_delays[retry_count];
-            thread::sleep(random_duration(min, max));
+            let (min, max) = retry_delays[retry_count];
+            thread::sleep(util::random_duration(min, max));
             retry_count += 1;
         }
     }
@@ -191,7 +188,7 @@ impl<'a> RequestBuilder<'a> {
         path: &Option<impl AsRef<Path>>,
     ) -> Result<DownloadResult, Error> {
         downloader.headers = HeaderMap::new();
-        let mut response = downloader.client.execute(request)?;
+        let mut response = downloader.execute(request)?;
         let status = response.status();
         downloader.headers = response.headers().clone();
 
@@ -258,14 +255,4 @@ impl<'a> RequestBuilder<'a> {
             Ok(DownloadResult::Bytes(bytes))
         }
     }
-}
-
-// ======================================================================
-// FUNCTIONS - PRIVATE
-// ======================================================================
-
-fn random_duration(min: Duration, max: Duration) -> Duration {
-    Duration::from_micros(fastrand::u64(
-        min.as_micros() as u64..=max.as_micros() as u64,
-    ))
 }

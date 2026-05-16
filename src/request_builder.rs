@@ -191,7 +191,7 @@ impl<'a> RequestBuilder<'a> {
             // `try_clone` can return `None` only if body isn't clonable,
             // but this code never sets body, so this `unwrap` can't fail.
             match RequestBuilder::download_once(
-                &mut self.downloader,
+                self.downloader,
                 &mut self.digest,
                 &self.expected_hash,
                 request.try_clone().unwrap(),
@@ -309,7 +309,7 @@ impl<'a> RequestBuilder<'a> {
 
 fn verify_hash(got: &[u8], expected: &Option<String>) -> Result<(), Error> {
     if let Some(expected) = expected {
-        let got = hex::encode(&got);
+        let got = hex::encode(got);
         if got != *expected {
             return Err(Error::HashMismatch {
                 got,

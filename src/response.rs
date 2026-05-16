@@ -82,11 +82,7 @@ impl GetResponse {
     ///
     /// See [`RequestBuilder::calculate_hash`] for an example.
     pub fn hash(&self) -> Option<String> {
-        if let Some(hash) = &self.hash {
-            Some(hex::encode(hash))
-        } else {
-            None
-        }
+        self.hash.as_ref().map(hex::encode)
     }
 
     /// Returns response headers.
@@ -100,7 +96,7 @@ impl GetResponse {
     ///
     /// Fails if Last-Modified header is invalid and can't be parsed.
     pub fn modified(&self) -> Result<Option<SystemTime>, Error> {
-        Ok(util::parse_last_modified_header(&self.headers)?)
+        util::parse_last_modified_header(&self.headers)
     }
 }
 
@@ -123,11 +119,7 @@ impl SaveToFileResponse {
     ///
     /// See [`RequestBuilder::calculate_hash`] for an example.
     pub fn hash(&self) -> Option<String> {
-        if let Some(hash) = &self.hash {
-            Some(hex::encode(hash))
-        } else {
-            None
-        }
+        self.hash.as_ref().map(hex::encode)
     }
 
     /// Returns response headers.
@@ -141,7 +133,7 @@ impl SaveToFileResponse {
     ///
     /// Fails if Last-Modified header is invalid and can't be parsed.
     pub fn modified(&self) -> Result<Option<SystemTime>, Error> {
-        Ok(util::parse_last_modified_header(&self.headers)?)
+        util::parse_last_modified_header(&self.headers)
     }
 
     /// Returns size of the downloaded file in bytes.

@@ -207,7 +207,7 @@ impl<'a> RequestBuilder<'a> {
 
                     if let Some(ref path) = path {
                         if path.as_ref().exists() {
-                            if let Some(error) = std::fs::remove_file(path).err() {
+                            if let Err(error) = std::fs::remove_file(path) {
                                 errors.push(error.into());
                             }
                         }
@@ -218,7 +218,11 @@ impl<'a> RequestBuilder<'a> {
             let retry_delays = self.downloader.retry_delays();
 
             if retry_count == retry_delays.len() {
-                return Err(Error::DownloadFailed(errors));
+                if errors.len() == 1 {
+                    return Err(errors.pop().unwrap());
+                } else {
+                    return Err(Error::DownloadFailed(errors));
+                }
             }
 
             let (min, max) = retry_delays[retry_count];

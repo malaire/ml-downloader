@@ -39,9 +39,9 @@ pub enum Error {
     /// Last-Modified header is invalid and couldn't be parsed.
     InvalidLastModifiedHeader,
 
-    /// Download failed.
+    /// Download failed with multiple errors.
     DownloadFailed(
-        /// Errors, one error for each (re)try.
+        /// The errors, at least one error for each (re)try.
         Vec<Error>,
     ),
 }

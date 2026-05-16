@@ -16,6 +16,7 @@ use crate::{response::Response, util, BytesResponse, Downloader, Error, SaveToFi
 // ======================================================================
 
 const BUFFER_SIZE_BYTES: usize = 64 * 1024;
+const PARTIAL_DOWNLOAD_FILE_EXTENSION: &str = "part";
 
 // ======================================================================
 // RequestBuilder - PUBLIC
@@ -76,17 +77,11 @@ impl<'a> RequestBuilder<'a> {
 
     /// Downloads the file and saves it to given path.
     ///
-    /// - With `temporary_extension`
-    ///   - File is downloaded to `{path}.{temporary_extension}`
-    ///     and renamed to `path` after download is successful.
-    ///   - Temporary file is removed if it exists already and if download fails.
-    ///   - Target file at `path` is not touched on failed download.
-    ///
-    /// - Without `temporary_extension`
-    ///   - File is downloaded to `path`.
-    ///   - File is removed if it exists already and if download fails.
-    ///
+    /// - During download the partially downloaded file is saved with temporary name `{path}.part`.
+    ///   - Temporary file is removed if it exists already and also if download fails.
+    /// - Once download succeeds file is renamed to `{path}`.
     /// - File modification time is set to Last Modified header, if present.
+    ///
     /// - Sleeps before starting download if needed.
     ///     - See [`DownloaderBuilder::delay`], [`DownloaderBuilder::interval`]
     ///       and [`Downloader::sleep_until_ready`].
@@ -105,18 +100,10 @@ impl<'a> RequestBuilder<'a> {
     /// # Ok::<(), ml_downloader::Error>(())
     /// ```
     ///
-    pub fn save_to_file(
-        self,
-        path: impl AsRef<Path>,
-        temporary_extension: Option<&str>,
-    ) -> Result<SaveToFileResponse, Error> {
+    pub fn save_to_file(self, path: impl AsRef<Path>) -> Result<SaveToFileResponse, Error> {
         let path = path.as_ref();
 
-        let download_path = if let Some(temp_ext) = temporary_extension {
-            path.with_added_extension(temp_ext)
-        } else {
-            path.to_path_buf()
-        };
+        let download_path = path.with_added_extension(PARTIAL_DOWNLOAD_FILE_EXTENSION);
 
         if download_path.exists() {
             std::fs::remove_file(&download_path)?;
@@ -126,12 +113,7 @@ impl<'a> RequestBuilder<'a> {
             .download(Some(&download_path))?
             .into_save_to_file_response_or_panic();
 
-        if download_path != path {
-            if path.exists() {
-                std::fs::remove_file(&path)?;
-            }
-            std::fs::rename(download_path, path)?;
-        }
+        std::fs::rename(download_path, path)?;
 
         Ok(response)
     }

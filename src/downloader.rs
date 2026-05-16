@@ -37,14 +37,19 @@ impl Downloader {
     }
 
     /// Creates new [`Downloader`] with default configuration.
+    ///
+    /// See [simple usage] for an example.
+    ///
+    /// [simple usage]: crate#simple-usage
     pub fn new() -> Result<Self, Error> {
         Self::from_builder(DownloaderBuilder::new())
     }
 
     /// Sleeps until ready for next download.
     ///
-    /// After this the next [`RequestBuilder::get`] will start
-    /// download immediately without sleep.
+    /// After this the next [`RequestBuilder::get`] or
+    /// [`RequestBuilder::save_to_file`] will start download immediately
+    /// without sleep.
     ///
     /// See [`DownloaderBuilder::delay`] and [`DownloaderBuilder::interval`].
     ///
@@ -74,11 +79,12 @@ impl Downloader {
 
     /// Begins building a request to download file from given `url`.
     ///
-    /// See [simple usage] and [`RequestBuilder::hash`] for examples.
+    /// See [simple usage] and [`RequestBuilder::verify_hash`] for examples.
     ///
     /// # Errors
     ///
-    /// If given `url` is invalid then [`RequestBuilder::get`] will fail.
+    /// If given `url` is invalid then [`RequestBuilder::get`] or
+    /// [`RequestBuilder::save_to_file`] will fail.
     ///
     /// [simple usage]: crate#simple-usage
     pub fn url<U: IntoUrl>(&mut self, url: U) -> RequestBuilder<'_> {

@@ -2,6 +2,10 @@ use std::{error::Error as StdError, fmt, io::Error as IoError};
 
 use reqwest::{Error as ReqwestError, StatusCode};
 
+// "unused" imports are used with `cargo doc`
+#[allow(unused_imports)]
+use crate::RequestBuilder;
+
 // ======================================================================
 // Error - PUBLIC
 // ======================================================================
@@ -24,11 +28,11 @@ pub enum Error {
         StatusCode,
     ),
 
-    /// Hash of downloaded file doesn't match.
+    /// Hash of the downloaded file doesn't match given hash.
     HashMismatch {
-        /// Hash of downloaded file, lowercase hexadecimal.
+        /// Hash of the downloaded file, lowercase hexadecimal.
         got: String,
-        /// Hash given to [`RequestBuilder::hash`], lowercase hexadecimal.
+        /// Hash given to [`RequestBuilder::verify_hash`], lowercase hexadecimal.
         expected: String,
     },
 

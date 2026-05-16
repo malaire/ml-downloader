@@ -2,7 +2,9 @@ use std::time::Duration;
 
 use reqwest::blocking::{Client, ClientBuilder};
 
-use crate::{Downloader, Error};
+// "unused" imports are used with `cargo doc`
+#[allow(unused_imports)]
+use crate::{Downloader, Error, RequestBuilder};
 
 // ======================================================================
 // DownloaderBuilder - PUBLIC
@@ -42,8 +44,9 @@ impl DownloaderBuilder {
     ///
     /// A random delay between given `min` and `max` is generated
     /// for each download. If elapsed time since previous download ended
-    /// is less than this delay then [`RequestBuilder::get`] will sleep
-    /// for the remaining duration before starting download.
+    /// is less than this delay then [`RequestBuilder::get`] and
+    /// [`RequestBuilder::save_to_file`] will sleep for the remaining
+    /// duration before starting download.
     ///
     /// See also [`DownloaderBuilder::interval`].
     ///
@@ -77,8 +80,9 @@ impl DownloaderBuilder {
     ///
     /// A random interval between given `min` and `max` is generated
     /// for each download. If elapsed time since previous download started
-    /// is less than this interval then [`RequestBuilder::get`] will sleep
-    /// for the remaining duration before starting download.
+    /// is less than this interval then [`RequestBuilder::get`] and
+    /// [`RequestBuilder::save_to_file`] will sleep for the remaining
+    /// duration before starting download.
     ///
     /// See also [`DownloaderBuilder::delay`].
     ///
@@ -147,7 +151,7 @@ impl DownloaderBuilder {
         }
     }
 
-    /// Sets retry delays in seconds, default is none.
+    /// Sets retry delays in seconds, default is no retries.
     ///
     /// Each item is a pair of `min` and `max` delays
     /// and the number of items defines the number of retries.

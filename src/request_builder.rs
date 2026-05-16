@@ -9,7 +9,12 @@ use std::{
 use digest::DynDigest;
 use reqwest::StatusCode;
 
-use crate::{response::Response, util, BytesResponse, Downloader, Error, SaveToFileResponse};
+// "unused" imports are used with `cargo doc`
+#[allow(unused_imports)]
+use crate::{
+    response::Response, util, BytesResponse, Downloader, DownloaderBuilder, Error,
+    SaveToFileResponse,
+};
 
 // ======================================================================
 // CONST - PRIVATE
@@ -60,11 +65,11 @@ impl<'a> RequestBuilder<'a> {
         }
     }
 
-    /// Downloads the file and returns it.
+    /// Downloads the file into RAM and returns it within [`BytesResponse`].
     ///
     /// - Sleeps before starting download if needed.
     ///   - See [`DownloaderBuilder::delay`], [`DownloaderBuilder::interval`]
-    //      and [`Downloader::sleep_until_ready`].
+    ///     and [`Downloader::sleep_until_ready`].
     /// - Number of retries and the delays inbetween them is configured with
     ///   [`DownloaderBuilder::retry_delays`].
     ///
@@ -81,7 +86,6 @@ impl<'a> RequestBuilder<'a> {
     ///   - Temporary file is removed if it exists already and also if download fails.
     /// - Once download succeeds file is renamed to `{path}`.
     /// - File modification time is set to Last Modified header, if present.
-    ///
     /// - Sleeps before starting download if needed.
     ///     - See [`DownloaderBuilder::delay`], [`DownloaderBuilder::interval`]
     ///       and [`Downloader::sleep_until_ready`].
@@ -96,7 +100,7 @@ impl<'a> RequestBuilder<'a> {
     /// let mut downloader = Downloader::new()?;
     /// let response = downloader
     ///     .url("https://example.com/")
-    ///     .save_to_file("example.html", Some("tmp"))?;
+    ///     .save_to_file("example.html")?;
     /// # Ok::<(), ml_downloader::Error>(())
     /// ```
     ///
@@ -121,9 +125,10 @@ impl<'a> RequestBuilder<'a> {
     /// Enables hash verification during download.
     ///
     /// Hash is calculated during download and if it differs from given hash
-    /// then [`RequestBuilder::get`] or [`RequestBuilder::save_to_file`] will fail with [`Error::HashMismatch`].
+    /// then [`RequestBuilder::get`] or [`RequestBuilder::save_to_file`]
+    /// will fail with [`Error::HashMismatch`].
     ///
-    /// Hash is given in hexadecimal, uppercase or lowercase.
+    /// Hash is given in hexadecimal, case is ignored.
     ///
     /// # Examples
     ///
@@ -134,7 +139,10 @@ impl<'a> RequestBuilder<'a> {
     /// let mut downloader = Downloader::new()?;
     /// let response = downloader
     ///     .url("https://example.com/")
-    ///     .verify_hash("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", Sha256::new())
+    ///     .verify_hash(
+    ///         "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    ///         Sha256::new(),
+    ///     )
     ///     .get()?;
     ///
     /// # Ok::<(), ml_downloader::Error>(())

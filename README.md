@@ -4,7 +4,7 @@ Simple blocking downloader, featuring:
 
 - retries with custom delays
 - custom delay or interval between successful downloads for rate limiting
-- hash check (optional)
+- hash calculation/verification (optional)
 - based on [reqwest](https://crates.io/crates/reqwest)
 
 ## Examples

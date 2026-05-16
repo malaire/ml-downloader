@@ -3,7 +3,9 @@ use std::time::SystemTime;
 use bytes::Bytes;
 use reqwest::header::HeaderMap;
 
-use crate::{util, Error};
+// "unused" imports are used with `cargo doc`
+#[allow(unused_imports)]
+use crate::{util, Error, RequestBuilder};
 
 // ======================================================================
 // Response - CRATE
@@ -60,7 +62,7 @@ impl Response {
 // BytesResponse - PUBLIC
 // ======================================================================
 
-/// Response returned by [`RequestBuilder::get`].
+/// A response returned by [`RequestBuilder::get`].
 pub struct BytesResponse {
     bytes: Bytes,
     hash: Option<Vec<u8>>,
@@ -75,10 +77,10 @@ impl BytesResponse {
 
     /// Returns hash of the downloaded file in lowercase hexadecimal.
     ///
-    /// Returns `Some` iff [`RequestBuilder::calculate_hash`] or
-    /// [`RequestBuilder::verify_hash`] was used.
+    /// Returns `Some` if [`RequestBuilder::calculate_hash`] or
+    /// [`RequestBuilder::verify_hash`] was used or `None` otherwise.
     ///
-    /// See [`RequestBuilder::calculate_hash`] for example.
+    /// See [`RequestBuilder::calculate_hash`] for an example.
     pub fn hash(&self) -> Option<String> {
         if let Some(hash) = &self.hash {
             Some(hex::encode(hash))
@@ -106,7 +108,7 @@ impl BytesResponse {
 // SaveToFileResponse - PUBLIC
 // ======================================================================
 
-/// Response returned by [`RequestBuilder::save_to_file`].
+/// A response returned by [`RequestBuilder::save_to_file`].
 pub struct SaveToFileResponse {
     hash: Option<Vec<u8>>,
     headers: HeaderMap,
@@ -116,10 +118,10 @@ pub struct SaveToFileResponse {
 impl SaveToFileResponse {
     /// Returns hash of the downloaded file in lowercase hexadecimal.
     ///
-    /// Returns `Some` iff [`RequestBuilder::calculate_hash`] or
-    /// [`RequestBuilder::verify_hash`] was used.
+    /// Returns `Some` if [`RequestBuilder::calculate_hash`] or
+    /// [`RequestBuilder::verify_hash`] was used or `None` otherwise.
     ///
-    /// See [`RequestBuilder::calculate_hash`] for example.
+    /// See [`RequestBuilder::calculate_hash`] for an example.
     pub fn hash(&self) -> Option<String> {
         if let Some(hash) = &self.hash {
             Some(hex::encode(hash))

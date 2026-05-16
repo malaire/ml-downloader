@@ -7,7 +7,7 @@ pub use crate::{
     downloader_builder::DownloaderBuilder,
     error::Error,
     request_builder::RequestBuilder,
-    response::{BytesResponse, SaveToFileResponse},
+    response::{GetResponse, SaveToFileResponse},
 };
 
 mod downloader;

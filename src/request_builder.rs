@@ -12,8 +12,7 @@ use reqwest::StatusCode;
 // "unused" imports are used with `cargo doc`
 #[allow(unused_imports)]
 use crate::{
-    response::Response, util, BytesResponse, Downloader, DownloaderBuilder, Error,
-    SaveToFileResponse,
+    response::Response, util, Downloader, DownloaderBuilder, Error, GetResponse, SaveToFileResponse,
 };
 
 // ======================================================================
@@ -65,7 +64,7 @@ impl<'a> RequestBuilder<'a> {
         }
     }
 
-    /// Downloads the file into RAM and returns it within [`BytesResponse`].
+    /// Downloads the file into RAM and returns it within [`GetResponse`].
     ///
     /// - Sleeps before starting download if needed.
     ///   - See [`DownloaderBuilder::delay`], [`DownloaderBuilder::interval`]
@@ -76,7 +75,7 @@ impl<'a> RequestBuilder<'a> {
     /// See [simple usage] and [`RequestBuilder::verify_hash`] for examples.
     ///
     /// [simple usage]: crate#simple-usage
-    pub fn get(self) -> Result<BytesResponse, Error> {
+    pub fn get(self) -> Result<GetResponse, Error> {
         Ok(self.download(None::<&Path>)?.into_bytes_response_or_panic())
     }
 

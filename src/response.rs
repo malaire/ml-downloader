@@ -12,15 +12,15 @@ use crate::{util, Error, RequestBuilder};
 // ======================================================================
 
 pub(crate) enum Response {
-    BytesResponse(BytesResponse),
+    GetResponse(GetResponse),
     SaveToFileResponse(SaveToFileResponse),
 }
 
 impl Response {
-    // This is only called when `self` is known to be `BytesResponse`.
-    pub(crate) fn into_bytes_response_or_panic(self) -> BytesResponse {
+    // This is only called when `self` is known to be `GetResponse`.
+    pub(crate) fn into_bytes_response_or_panic(self) -> GetResponse {
         match self {
-            Response::BytesResponse(response) => response,
+            Response::GetResponse(response) => response,
             Response::SaveToFileResponse(_) => panic!("internal error"),
         }
     }
@@ -28,7 +28,7 @@ impl Response {
     // This is only called when `self` is known to be `SaveToFileResponse`.
     pub(crate) fn into_save_to_file_response_or_panic(self) -> SaveToFileResponse {
         match self {
-            Response::BytesResponse(_) => panic!("internal error"),
+            Response::GetResponse(_) => panic!("internal error"),
             Response::SaveToFileResponse(response) => response,
         }
     }
@@ -38,7 +38,7 @@ impl Response {
         hash: Option<Vec<u8>>,
         headers: HeaderMap,
     ) -> Self {
-        Response::BytesResponse(BytesResponse {
+        Response::GetResponse(GetResponse {
             bytes,
             hash,
             headers,
@@ -59,17 +59,17 @@ impl Response {
 }
 
 // ======================================================================
-// BytesResponse - PUBLIC
+// GetResponse - PUBLIC
 // ======================================================================
 
 /// A response returned by [`RequestBuilder::get`].
-pub struct BytesResponse {
+pub struct GetResponse {
     bytes: Bytes,
     hash: Option<Vec<u8>>,
     headers: HeaderMap,
 }
 
-impl BytesResponse {
+impl GetResponse {
     /// Returns downloaded file.
     pub fn bytes(&self) -> &Bytes {
         &self.bytes

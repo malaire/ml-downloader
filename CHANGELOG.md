@@ -1,6 +1,8 @@
 # Changelog
 
 ## NEXT
+
+## 0.3.0 - 2026-05-16
 - rename `Downloader::get` to `url` **breaking**
 - rename `RequestBuilder::send` to `get` and change return value to `BytesResponse` **breaking**
 - rename `RequestBuilder::hash` to `verify_hash` **breaking**

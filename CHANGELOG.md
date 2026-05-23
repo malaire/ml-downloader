@@ -1,6 +1,8 @@
 # Changelog
 
 ## NEXT
+
+## 0.3.1 - 2026-05-23
 - add `GetResponse::into_bytes`
 - add `RequestBuilder::get_bytes`
 

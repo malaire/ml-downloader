@@ -85,6 +85,11 @@ impl GetResponse {
         self.hash.as_ref().map(hex::encode)
     }
 
+    /// Returns downloaded file, consuming `self`.
+    pub fn into_bytes(self) -> Bytes {
+        self.bytes
+    }
+
     /// Returns response headers.
     pub fn headers(&self) -> &HeaderMap {
         &self.headers

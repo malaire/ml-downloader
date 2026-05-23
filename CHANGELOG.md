@@ -1,6 +1,7 @@
 # Changelog
 
 ## NEXT
+- add `GetResponse::into_bytes`
 
 ## 0.3.0 - 2026-05-16
 - rename `Downloader::get` to `url` **breaking**

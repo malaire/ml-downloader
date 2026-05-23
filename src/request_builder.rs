@@ -95,9 +95,16 @@ impl<'a> RequestBuilder<'a> {
     /// - Number of retries and the delays inbetween them is configured with
     ///   [`DownloaderBuilder::retry_delays`].
     ///
-    /// See [simple usage] for an example.
+    /// # Examples
     ///
-    /// [simple usage]: crate#simple-usage
+    /// ```no_run
+    /// use ml_downloader::Downloader;
+    ///
+    /// let mut downloader = Downloader::new()?;
+    /// let bytes = downloader.url("https://example.com/").get_bytes()?;
+    ///
+    /// # Ok::<(), ml_downloader::Error>(())
+    /// ```
     pub fn get_bytes(self) -> Result<Bytes, Error> {
         Ok(self.get()?.into_bytes())
     }

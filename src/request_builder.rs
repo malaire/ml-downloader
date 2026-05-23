@@ -6,6 +6,7 @@ use std::{
     time::Instant,
 };
 
+use bytes::Bytes;
 use digest::DynDigest;
 use reqwest::StatusCode;
 
@@ -72,11 +73,33 @@ impl<'a> RequestBuilder<'a> {
     /// - Number of retries and the delays inbetween them is configured with
     ///   [`DownloaderBuilder::retry_delays`].
     ///
-    /// See [simple usage] and [`RequestBuilder::verify_hash`] for examples.
+    /// # Examples
     ///
-    /// [simple usage]: crate#simple-usage
+    /// ```no_run
+    /// use ml_downloader::Downloader;
+    ///
+    /// let mut downloader = Downloader::new()?;
+    /// let response = downloader.url("https://example.com/").get()?;
+    ///
+    /// # Ok::<(), ml_downloader::Error>(())
+    /// ```
     pub fn get(self) -> Result<GetResponse, Error> {
         Ok(self.download(None::<&Path>)?.into_bytes_response_or_panic())
+    }
+
+    /// Downloads the file into RAM and returns it as [`Bytes`].
+    ///
+    /// - Sleeps before starting download if needed.
+    ///   - See [`DownloaderBuilder::delay`], [`DownloaderBuilder::interval`]
+    ///     and [`Downloader::sleep_until_ready`].
+    /// - Number of retries and the delays inbetween them is configured with
+    ///   [`DownloaderBuilder::retry_delays`].
+    ///
+    /// See [simple usage] for an example.
+    ///
+    /// [simple usage]: crate#simple-usage
+    pub fn get_bytes(self) -> Result<Bytes, Error> {
+        Ok(self.get()?.into_bytes())
     }
 
     /// Downloads the file and saves it to given path.
